@@ -77,4 +77,4 @@ The **Ultimate Pro Studio Bible** is a comprehensive, single-page web applicatio
 
 ---
 
-## 📁 Project Structure
+## https://mr-danix.github.io/studiobible/
