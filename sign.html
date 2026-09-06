@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Studio Bible | Secure Access</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --bg: #0a0c10;
+            --neon-blue: #00f3ff;
+            --neon-purple: #bc13fe;
+            --neon-cyan: #00fff9;
+            --text: #e0e6ed;
+            --text-muted: #8b9bb4;
+            --glass: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --scroll-y: 0;
+            --scroll-speed: 0;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            overflow-x: hidden;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #particle-canvas {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: -1; pointer-events: none;
+        }
+
+        /* ==========================================
+           🎧 LOADING SCREEN
+           ========================================== */
+        #loader {
+            position: fixed; inset: 0;
+            background: radial-gradient(circle at center, #0f1218 0%, #050608 100%);
+            z-index: 9999;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            transition: opacity 0.8s ease, visibility 0.8s ease;
+        }
+        #loader.hidden { opacity: 0; visibility: hidden; }
+
+        .loader-vinyl-container {
+            position: relative; width: 200px; height: 200px; margin-bottom: 30px;
+        }
+        .loader-vinyl {
+            width: 100%; height: 100%;
+            animation: vinylSpin 3s linear infinite;
+            filter: drop-shadow(0 0 30px rgba(188, 19, 254, 0.5));
+        }
+        @keyframes vinylSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+        .loader-tonearm {
+            position: absolute; top: -10px; right: -20px;
+            width: 100px; height: 120px;
+            transform-origin: top right;
+            animation: tonearmDrop 1.5s ease-out forwards;
+        }
+        @keyframes tonearmDrop { 0% { transform: rotate(-30deg); } 100% { transform: rotate(15deg); } }
+
+        .loader-percentage {
+            font-size: 4rem; font-weight: 900;
+            background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: 0 0 40px rgba(0, 243, 255, 0.3);
+            letter-spacing: -0.05em; margin-bottom: 8px;
+            font-variant-numeric: tabular-nums;
+        }
+        .loader-status {
+            font-size: 0.9rem; color: var(--text-muted);
+            text-transform: uppercase; letter-spacing: 3px;
+            margin-bottom: 24px; min-height: 20px;
+            transition: opacity 0.3s ease; text-align: center;
+        }
+        .loader-waveform {
+            display: flex; align-items: center; gap: 3px;
+            height: 50px; width: 320px; max-width: 80vw; margin-bottom: 16px;
+        }
+        .wave-bar {
+            flex: 1;
+            background: linear-gradient(to top, var(--neon-cyan), var(--neon-purple));
+            border-radius: 2px; height: 20%; opacity: 0.25;
+            transition: height 0.3s ease, opacity 0.3s ease, box-shadow 0.3s ease;
+        }
+        .wave-bar.active { opacity: 1; box-shadow: 0 0 8px rgba(0, 243, 255, 0.6); }
+
+        .loader-eq {
+            display: flex; gap: 6px; height: 40px;
+            align-items: flex-end; margin-top: 20px;
+        }
+        .loader-eq-bar {
+            width: 8px;
+            background: linear-gradient(to top, var(--neon-cyan), var(--neon-purple));
+            border-radius: 2px;
+            animation: eqBounce 0.8s infinite ease-in-out;
+        }
+        @keyframes eqBounce { 0%, 100% { height: 15%; } 50% { height: 100%; } }
+        .loader-eq-bar:nth-child(1) { animation-delay: 0.0s; }
+        .loader-eq-bar:nth-child(2) { animation-delay: 0.1s; }
+        .loader-eq-bar:nth-child(3) { animation-delay: 0.2s; }
+        .loader-eq-bar:nth-child(4) { animation-delay: 0.3s; }
+        .loader-eq-bar:nth-child(5) { animation-delay: 0.4s; }
+        .loader-eq-bar:nth-child(6) { animation-delay: 0.5s; }
+        .loader-eq-bar:nth-child(7) { animation-delay: 0.6s; }
+        .loader-eq-bar:nth-child(8) { animation-delay: 0.7s; }
+        .loader-eq-bar:nth-child(9) { animation-delay: 0.8s; }
+
+        .loader-brand {
+            position: absolute; bottom: 30px;
+            font-size: 0.75rem; letter-spacing: 4px;
+            color: var(--text-muted); text-transform: uppercase;
+        }
+        .loader-brand span {
+            background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            font-weight: 900;
+        }
+
+        /* ==========================================
+           STUDIO BACKGROUND ELEMENTS
+           ========================================== */
+        .studio-bg-element { position: fixed; z-index: -2; pointer-events: none; will-change: transform; }
+        .studio-bg-headset-wrapper {
+            top: 10%; right: 10%; width: 250px; height: 250px; opacity: 0.15;
+            animation: floatElement 6s ease-in-out infinite;
+        }
+        .studio-bg-headset-svg {
+            width: 100%; height: 100%;
+            transform: translateY(calc(var(--scroll-y, 0) * 0.1px)) rotate(calc(var(--scroll-y, 0) * 0.08deg));
+            filter: drop-shadow(0 0 40px rgba(0, 243, 255, 0.3));
+        }
+        .studio-bg-speaker-wrapper {
+            bottom: 5%; left: 5%; width: 200px; height: 300px; opacity: 0.12;
+            animation: floatElement 8s ease-in-out infinite reverse;
+        }
+        .studio-bg-speaker-svg {
+            width: 100%; height: 100%;
+            transform: translateY(calc(var(--scroll-y, 0) * -0.05px)) scale(calc(1 + var(--scroll-speed, 0) * 0.003));
+            filter: drop-shadow(0 0 40px rgba(188, 19, 254, 0.3));
+        }
+        .studio-bg-vinyl-wrapper { bottom: 15%; right: 5%; width: 160px; height: 160px; opacity: 0.15; }
+        .studio-bg-vinyl-svg {
+            width: 100%; height: 100%;
+            animation: spin 12s linear infinite;
+            filter: drop-shadow(0 0 30px rgba(188, 19, 254, 0.3));
+            transform: rotate(calc(var(--scroll-speed, 0) * 2deg));
+            transition: transform 0.1s linear;
+        }
+        @keyframes floatElement { 0%, 100% { transform: translateY(0) translateX(0); } 50% { transform: translateY(-15px) translateX(10px); } }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+        @media (max-width: 768px) {
+            .studio-bg-headset-wrapper { width: 120px; height: 120px; top: 5%; right: -20px; }
+            .studio-bg-speaker-wrapper { width: 100px; height: 150px; bottom: 5%; left: -20px; }
+            .studio-bg-vinyl-wrapper { width: 80px; height: 80px; bottom: 10%; right: -10px; }
+            .loader-percentage { font-size: 3rem; }
+            .loader-vinyl-container { width: 150px; height: 150px; }
+        }
+
+        /* ==========================================
+           AUTHENTICATION STYLES
+           ========================================== */
+        .auth-container { width: 100%; max-width: 440px; padding: 20px; z-index: 10; }
+        .auth-card {
+            background: var(--glass); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+            border: 1px solid var(--glass-border); border-radius: 24px;
+            padding: 40px 32px; position: relative; overflow: hidden;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+        }
+        .auth-card::before {
+            content: ""; position: absolute; inset: -2px; border-radius: 26px;
+            background: linear-gradient(45deg, var(--neon-cyan), var(--neon-blue), var(--neon-purple), var(--neon-cyan));
+            background-size: 400%; z-index: -1; animation: gradient-rotate 4s linear infinite; opacity: 0.6;
+        }
+        .auth-card::after {
+            content: ""; position: absolute; inset: 0; border-radius: 24px; background: var(--bg); z-index: -1;
+        }
+        @keyframes gradient-rotate { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+
+        .auth-header { text-align: center; margin-bottom: 32px; }
+        .auth-header h2 {
+            font-size: 1.8rem; font-weight: 800; margin-bottom: 8px;
+            background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .auth-header p { color: var(--text-muted); font-size: 0.9rem; }
+
+        .form-group { margin-bottom: 20px; position: relative; }
+        .form-group label {
+            display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-muted);
+            margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .form-group input {
+            width: 100%; padding: 14px 16px 14px 44px; background: rgba(255,255,255,0.03);
+            border: 1px solid var(--glass-border); border-radius: 12px;
+            color: var(--text); font-family: 'Inter', sans-serif; font-size: 0.95rem;
+            transition: all 0.3s ease; outline: none;
+        }
+        .form-group input:focus {
+            border-color: var(--neon-cyan);
+            box-shadow: 0 0 15px rgba(0, 243, 255, 0.15);
+            background: rgba(0, 243, 255, 0.02);
+        }
+        .form-group > i.field-icon {
+            position: absolute; left: 16px; top: 39px; color: var(--text-muted);
+            transition: color 0.3s; font-size: 0.9rem;
+        }
+        .form-group input:focus ~ i.field-icon { color: var(--neon-cyan); }
+
+        .auth-btn {
+            width: 100%; padding: 14px; margin-top: 10px;
+            background: linear-gradient(90deg, var(--neon-blue), var(--neon-purple));
+            color: white; border: none; border-radius: 12px;
+            font-weight: 700; font-size: 1rem; cursor: pointer;
+            transition: all 0.3s ease; position: relative; overflow: hidden;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+        }
+        .auth-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(188, 19, 254, 0.4); }
+        .auth-btn:active { transform: translateY(0); }
+        .auth-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+        .auth-switch { text-align: center; margin-top: 24px; font-size: 0.9rem; color: var(--text-muted); }
+        .auth-switch a { color: var(--neon-cyan); text-decoration: none; font-weight: 600; cursor: pointer; transition: color 0.3s; }
+        .auth-switch a:hover { color: var(--neon-purple); text-decoration: underline; }
+
+        .message-box {
+            padding: 12px 16px; border-radius: 10px; margin-bottom: 20px;
+            font-size: 0.85rem; font-weight: 600; display: none;
+            animation: slideDown 0.3s ease; border-left: 3px solid;
+        }
+        .message-box.error {
+            background: rgba(255, 71, 87, 0.1); border-left-color: #ff4757;
+            color: #ff6b81; display: flex; align-items: center; gap: 10px;
+        }
+        .message-box.success {
+            background: rgba(46, 213, 115, 0.1); border-left-color: #2ed573;
+            color: #7bed9f; display: flex; align-items: center; gap: 10px;
+        }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .form-view { transition: opacity 0.4s ease, transform 0.4s ease; }
+        .form-view.hidden-view { display: none; opacity: 0; transform: translateX(20px); }
+        .form-view.active-view { display: block; opacity: 1; transform: translateX(0); }
+
+        .spinner {
+            width: 18px; height: 18px; border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: #fff; border-radius: 50%;
+            animation: spinLoader 0.8s linear infinite; display: none;
+        }
+        @keyframes spinLoader { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <!-- ==========================================
+         🎧 LOADING SCREEN (Reusable)
+         ========================================== -->
+    <div id="loader">
+        <div class="loader-vinyl-container">
+            <svg class="loader-vinyl" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <radialGradient id="loaderVinylGrad" cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" stop-color="#1a1a2e"/>
+                        <stop offset="70%" stop-color="#0a0c10"/>
+                        <stop offset="100%" stop-color="#000"/>
+                    </radialGradient>
+                    <radialGradient id="loaderLabelGrad" cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" stop-color="#bc13fe"/>
+                        <stop offset="100%" stop-color="#00f3ff"/>
+                    </radialGradient>
+                </defs>
+                <circle cx="100" cy="100" r="98" fill="url(#loaderVinylGrad)" stroke="#333" stroke-width="1"/>
+                <circle cx="100" cy="100" r="88" fill="none" stroke="#1a1a2e" stroke-width="0.5"/>
+                <circle cx="100" cy="100" r="80" fill="none" stroke="#1a1a2e" stroke-width="0.5"/>
+                <circle cx="100" cy="100" r="72" fill="none" stroke="#1a1a2e" stroke-width="0.5"/>
+                <circle cx="100" cy="100" r="64" fill="none" stroke="#1a1a2e" stroke-width="0.5"/>
+                <circle cx="100" cy="100" r="56" fill="none" stroke="#1a1a2e" stroke-width="0.5"/>
+                <circle cx="100" cy="100" r="48" fill="none" stroke="#1a1a2e" stroke-width="0.5"/>
+                <circle cx="100" cy="100" r="38" fill="url(#loaderLabelGrad)"/>
+                <circle cx="100" cy="100" r="38" fill="none" stroke="#00f3ff" stroke-width="1" opacity="0.5"/>
+                <circle cx="100" cy="100" r="6" fill="#0a0c10" stroke="#00f3ff" stroke-width="1"/>
+                <path d="M 30 60 Q 100 20 170 60" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="30" stroke-linecap="round"/>
+            </svg>
+            <svg class="loader-tonearm" viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="90" cy="10" r="8" fill="#1a1a2e" stroke="#00f3ff" stroke-width="1.5"/>
+                <line x1="90" y1="10" x2="20" y2="90" stroke="#8b9bb4" stroke-width="3" stroke-linecap="round"/>
+                <circle cx="20" cy="90" r="6" fill="#0a0c10" stroke="#bc13fe" stroke-width="1.5"/>
+                <rect x="10" y="92" width="20" height="8" rx="2" fill="#1a1a2e" stroke="#00f3ff" stroke-width="1"/>
+            </svg>
+        </div>
+
+        <div class="loader-percentage" id="loader-percent">0%</div>
+        <div class="loader-status" id="loader-status">Booting the studio...</div>
+        <div class="loader-waveform" id="loader-waveform"></div>
+
+        <div class="loader-eq">
+            <div class="loader-eq-bar"></div><div class="loader-eq-bar"></div>
+            <div class="loader-eq-bar"></div><div class="loader-eq-bar"></div>
+            <div class="loader-eq-bar"></div><div class="loader-eq-bar"></div>
+            <div class="loader-eq-bar"></div><div class="loader-eq-bar"></div>
+            <div class="loader-eq-bar"></div>
+        </div>
+
+        <div class="loader-brand"><span>STUDIO</span> BIBLE · v2026</div>
+    </div>
+
+    <canvas id="particle-canvas"></canvas>
+
+    <!-- Background Studio Elements -->
+    <div class="studio-bg-element studio-bg-headset-wrapper">
+        <svg viewBox="0 0 200 200" class="studio-bg-headset-svg" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <linearGradient id="headsetGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#00f3ff"/><stop offset="100%" stop-color="#bc13fe"/>
+                </linearGradient>
+                <filter id="glow"><feGaussianBlur stdDeviation="3" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+            </defs>
+            <path d="M 45 110 A 55 55 0 0 1 155 110" fill="none" stroke="url(#headsetGrad)" stroke-width="6" stroke-linecap="round" filter="url(#glow)"/>
+            <path d="M 45 110 L 45 125" stroke="#00f3ff" stroke-width="6" stroke-linecap="round"/>
+            <path d="M 155 110 L 155 125" stroke="#bc13fe" stroke-width="6" stroke-linecap="round"/>
+            <rect x="20" y="120" width="50" height="70" rx="12" fill="rgba(10, 12, 16, 0.9)" stroke="#00f3ff" stroke-width="3" filter="url(#glow)"/>
+            <circle cx="45" cy="155" r="15" fill="none" stroke="#00f3ff" stroke-width="2"/><circle cx="45" cy="155" r="5" fill="#00f3ff"/>
+            <rect x="130" y="120" width="50" height="70" rx="12" fill="rgba(10, 12, 16, 0.9)" stroke="#bc13fe" stroke-width="3" filter="url(#glow)"/>
+            <circle cx="155" cy="155" r="15" fill="none" stroke="#bc13fe" stroke-width="2"/><circle cx="155" cy="155" r="5" fill="#bc13fe"/>
+        </svg>
+    </div>
+
+    <div class="studio-bg-element studio-bg-speaker-wrapper">
+        <svg viewBox="0 0 200 320" class="studio-bg-speaker-svg" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <linearGradient id="speakerGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stop-color="#1a1a2e"/><stop offset="100%" stop-color="#0a0c10"/>
+                </linearGradient>
+                <filter id="speakerGlow"><feGaussianBlur stdDeviation="4" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+            </defs>
+            <rect x="15" y="15" width="170" height="290" rx="12" fill="url(#speakerGrad)" stroke="#bc13fe" stroke-width="3" filter="url(#speakerGlow)"/>
+            <circle cx="100" cy="70" r="30" fill="#0a0c10" stroke="#00f3ff" stroke-width="3"/>
+            <circle cx="100" cy="70" r="20" fill="#12151c" stroke="#00f3ff" stroke-width="2"/>
+            <circle cx="100" cy="70" r="8" fill="#00f3ff" opacity="0.8"/>
+            <circle cx="100" cy="210" r="70" fill="#0a0c10" stroke="#bc13fe" stroke-width="4"/>
+            <circle cx="100" cy="210" r="50" fill="#12151c" stroke="#bc13fe" stroke-width="2"/>
+            <circle cx="100" cy="210" r="12" fill="#0a0c10" stroke="#bc13fe" stroke-width="2"/>
+        </svg>
+    </div>
+
+    <div class="studio-bg-element studio-bg-vinyl-wrapper">
+        <svg viewBox="0 0 200 200" class="studio-bg-vinyl-svg" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <radialGradient id="vinylGrad" cx="50%" cy="50%" r="50%">
+                    <stop offset="75%" stop-color="#111"/><stop offset="80%" stop-color="#222"/>
+                    <stop offset="85%" stop-color="#111"/><stop offset="90%" stop-color="#222"/>
+                    <stop offset="95%" stop-color="#111"/><stop offset="100%" stop-color="#1a1a2e"/>
+                </radialGradient>
+            </defs>
+            <circle cx="100" cy="100" r="95" fill="url(#vinylGrad)" stroke="#333" stroke-width="2"/>
+            <circle cx="100" cy="100" r="35" fill="#bc13fe" opacity="0.9"/>
+            <circle cx="100" cy="100" r="12" fill="#0a0c10" stroke="#00f3ff" stroke-width="2"/>
+            <circle cx="100" cy="100" r="4" fill="#00f3ff"/>
+        </svg>
+    </div>
+
+    <!-- ==========================================
+         AUTHENTICATION CONTAINER
+         ========================================== -->
+    <div class="auth-container">
+        <div class="auth-card" id="auth-card">
+            
+            <!-- LOGIN VIEW -->
+            <div id="login-view" class="form-view active-view">
+                <div class="auth-header">
+                    <h2>Welcome Back</h2>
+                    <p>Enter your credentials to access the Studio Bible</p>
+                </div>
+                <div id="login-message" class="message-box"></div>
+                <form id="login-form">
+                    <div class="form-group">
+                        <label>Email Address</label>
+                        <input type="email" id="login-email" required placeholder="producer@studio.com" autocomplete="email">
+                        <i class="fas fa-envelope field-icon"></i>
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" id="login-password" required placeholder="••••••••" autocomplete="current-password">
+                        <i class="fas fa-lock field-icon"></i>
+                    </div>
+                    <button type="submit" class="auth-btn" id="login-btn">
+                        <span class="btn-text"><i class="fas fa-sign-in-alt"></i> Sign In</span>
+                        <div class="spinner"></div>
+                    </button>
+                </form>
+                <div class="auth-switch">
+                    Don't have an account? <a onclick="switchView('register')">Register here</a>
+                </div>
+            </div>
+
+            <!-- REGISTER VIEW -->
+            <div id="register-view" class="form-view hidden-view">
+                <div class="auth-header">
+                    <h2>Join the Studio</h2>
+                    <p>Create your producer account to get started</p>
+                </div>
+                <div id="register-message" class="message-box"></div>
+                <form id="register-form">
+                    <div class="form-group">
+                        <label>Full Name</label>
+                        <input type="text" id="reg-name" required placeholder="John Doe" autocomplete="name">
+                        <i class="fas fa-user field-icon"></i>
+                    </div>
+                    <div class="form-group">
+                        <label>Email Address</label>
+                        <input type="email" id="reg-email" required placeholder="producer@studio.com" autocomplete="email">
+                        <i class="fas fa-envelope field-icon"></i>
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" id="reg-password" required placeholder="Min 6 characters" minlength="6" autocomplete="new-password">
+                        <i class="fas fa-lock field-icon"></i>
+                    </div>
+                    <div class="form-group">
+                        <label>Confirm Password</label>
+                        <input type="password" id="reg-confirm" required placeholder="••••••••" autocomplete="new-password">
+                        <i class="fas fa-shield-alt field-icon"></i>
+                    </div>
+                    <button type="submit" class="auth-btn" id="register-btn">
+                        <span class="btn-text"><i class="fas fa-user-plus"></i> Create Account</span>
+                        <div class="spinner"></div>
+                    </button>
+                </form>
+                <div class="auth-switch">
+                    Already have an account? <a onclick="switchView('login')">Sign in here</a>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // 🎧 1. REUSABLE LOADING SCREEN SYSTEM
+        // ==========================================
+        const loaderPercent = document.getElementById('loader-percent');
+        const loaderStatus = document.getElementById('loader-status');
+        const loaderWaveform = document.getElementById('loader-waveform');
+        const loader = document.getElementById('loader');
+
+        const WAVE_BARS = 60;
+        // Pre-generate waveform bars
+        for (let i = 0; i < WAVE_BARS; i++) {
+            const bar = document.createElement('div');
+            bar.className = 'wave-bar';
+            bar.style.height = '20%';
+            loaderWaveform.appendChild(bar);
+        }
+        const waveBars = loaderWaveform.querySelectorAll('.wave-bar');
+
+        // Boot messages (initial page load)
+        const bootMessages = [
+            { at: 0,   text: 'Booting the studio...' },
+            { at: 8,   text: 'Warming up the vacuum tubes...' },
+            { at: 18,  text: 'Calibrating the monitors...' },
+            { at: 28,  text: 'Loading the mix console...' },
+            { at: 40,  text: 'Tuning the frequencies...' },
+            { at: 52,  text: 'Aligning the tape heads...' },
+            { at: 65,  text: 'Routing the signal chain...' },
+            { at: 78,  text: 'Patching the outboard gear...' },
+            { at: 88,  text: 'Final soundcheck...' },
+            { at: 96,  text: 'Studio ready. Welcome, producer.' }
+        ];
+
+        // Login messages (when user logs in)
+        const loginMessages = [
+            { at: 0,   text: 'Verifying credentials...' },
+            { at: 10,  text: 'Authenticating producer...' },
+            { at: 22,  text: 'Loading your session...' },
+            { at: 35,  text: 'Warming up the console...' },
+            { at: 48,  text: 'Loading your projects...' },
+            { at: 62,  text: 'Syncing the studio...' },
+            { at: 75,  text: 'Preparing the mix...' },
+            { at: 88,  text: 'Final checks...' },
+            { at: 96,  text: 'Welcome back to the studio.' }
+        ];
+
+        let loaderInterval = null;
+
+        /**
+         * Reusable loader function.
+         * @param {Function} onComplete - Callback when loader hits 100%
+         * @param {Array} messages - Array of {at, text} status messages
+         */
+        function startLoader(onComplete = null, messages = bootMessages) {
+            // Clear any existing interval
+            if (loaderInterval) clearInterval(loaderInterval);
+
+            // Reset state
+            let currentProgress = 0;
+            let currentStatusIdx = 0;
+
+            // Reset UI
+            loaderPercent.textContent = '0%';
+            loaderStatus.textContent = messages[0].text;
+            loaderStatus.style.opacity = '1';
+            waveBars.forEach(bar => {
+                bar.classList.remove('active');
+                bar.style.height = '20%';
+            });
+
+            // Restart tonearm animation
+            const tonearm = document.querySelector('.loader-tonearm');
+            tonearm.style.animation = 'none';
+            void tonearm.offsetWidth; // Force reflow
+            tonearm.style.animation = 'tonearmDrop 1.5s ease-out forwards';
+
+            // Show loader
+            loader.classList.remove('hidden');
+
+            // Start animation
+            loaderInterval = setInterval(() => {
+                // Variable speed for cinematic feel
+                let increment = 1;
+                if (currentProgress < 20) increment = 1;
+                else if (currentProgress < 60) increment = 2;
+                else if (currentProgress < 85) increment = 1;
+                else increment = 1;
+
+                currentProgress = Math.min(100, currentProgress + increment);
+                loaderPercent.textContent = currentProgress + '%';
+
+                // Update waveform
+                const activeBars = Math.floor((currentProgress / 100) * WAVE_BARS);
+                waveBars.forEach((bar, idx) => {
+                    if (idx < activeBars) {
+                        bar.classList.add('active');
+                        const h = 30 + Math.random() * 70;
+                        bar.style.height = h + '%';
+                    } else {
+                        bar.classList.remove('active');
+                        bar.style.height = '20%';
+                    }
+                });
+
+                // Update status message
+                if (currentStatusIdx < messages.length - 1 && 
+                    currentProgress >= messages[currentStatusIdx + 1].at) {
+                    currentStatusIdx++;
+                    loaderStatus.style.opacity = '0';
+                    setTimeout(() => {
+                        loaderStatus.textContent = messages[currentStatusIdx].text;
+                        loaderStatus.style.opacity = '1';
+                    }, 200);
+                }
+
+                // Complete
+                if (currentProgress >= 100) {
+                    clearInterval(loaderInterval);
+                    loaderInterval = null;
+                    setTimeout(() => {
+                        loader.classList.add('hidden');
+                        if (typeof onComplete === 'function') onComplete();
+                    }, 500);
+                }
+            }, 50);
+        }
+
+        // ==========================================
+        // 2. PARTICLE BACKGROUND SYSTEM
+        // ==========================================
+        const canvas = document.getElementById('particle-canvas');
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        for (let i = 0; i < 80; i++) {
+            particles.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                radius: Math.random() * 2 + 0.5,
+                vx: (Math.random() - 0.5) * 0.4,
+                vy: (Math.random() - 0.5) * 0.4,
+                alpha: Math.random() * 0.4 + 0.1
+            });
+        }
+
+        function animateParticles() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles.forEach(p => {
+                p.x += p.vx; p.y += p.vy;
+                if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
+                if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(0, 243, 255, ${p.alpha})`;
+                ctx.fill();
+            });
+            requestAnimationFrame(animateParticles);
+        }
+        animateParticles();
+
+        // ==========================================
+        // 3. SCROLL PHYSICS FOR BACKGROUND ELEMENTS
+        // ==========================================
+        let lastScrollY = window.scrollY;
+        let scrollSpeed = 0;
+        let ticking = false;
+
+        window.addEventListener('scroll', () => {
+            if (!ticking) {
+                window.requestAnimationFrame(() => {
+                    const currentScrollY = window.scrollY;
+                    scrollSpeed = Math.abs(currentScrollY - lastScrollY);
+                    lastScrollY = currentScrollY;
+                    const cappedSpeed = Math.min(scrollSpeed, 60);
+                    document.documentElement.style.setProperty('--scroll-y', currentScrollY);
+                    document.documentElement.style.setProperty('--scroll-speed', cappedSpeed);
+                    ticking = false;
+                });
+                ticking = true;
+            }
+        });
+
+        // ==========================================
+        // 4. AUTHENTICATION LOGIC (LOCAL STORAGE)
+        // ==========================================
+        const loginForm = document.getElementById('login-form');
+        const registerForm = document.getElementById('register-form');
+        const loginMessage = document.getElementById('login-message');
+        const registerMessage = document.getElementById('register-message');
+
+        function showMessage(element, type, text) {
+            element.className = `message-box ${type}`;
+            element.innerHTML = `<i class="fas fa-${type === 'error' ? 'exclamation-circle' : 'check-circle'}"></i> ${text}`;
+            element.style.display = 'flex';
+            setTimeout(() => { element.style.display = 'none'; }, 5000);
+        }
+
+        function setLoading(btnId, isLoading) {
+            const btn = document.getElementById(btnId);
+            const text = btn.querySelector('.btn-text');
+            const spinner = btn.querySelector('.spinner');
+            btn.disabled = isLoading;
+            text.style.display = isLoading ? 'none' : 'flex';
+            spinner.style.display = isLoading ? 'block' : 'none';
+        }
+
+        // REGISTER HANDLER
+        registerForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const name = document.getElementById('reg-name').value.trim();
+            const email = document.getElementById('reg-email').value.trim().toLowerCase();
+            const password = document.getElementById('reg-password').value;
+            const confirm = document.getElementById('reg-confirm').value;
+
+            if (password !== confirm) {
+                showMessage(registerMessage, 'error', 'Passwords do not match. Please try again.');
+                return;
+            }
+
+            setLoading('register-btn', true);
+
+            setTimeout(() => {
+                let users = JSON.parse(localStorage.getItem('studio_users') || '[]');
+                
+                if (users.find(u => u.email === email)) {
+                    showMessage(registerMessage, 'error', 'An account with this email already exists. Please login.');
+                    setLoading('register-btn', false);
+                    return;
+                }
+
+                users.push({ name, email, password });
+                localStorage.setItem('studio_users', JSON.stringify(users));
+                
+                showMessage(registerMessage, 'success', 'Account created successfully! Redirecting to login...');
+                registerForm.reset();
+                setLoading('register-btn', false);
+                
+                setTimeout(() => {
+                    switchView('login');
+                    showMessage(loginMessage, 'success', 'Registration successful! Please log in.');
+                }, 1500);
+            }, 800);
+        });
+
+        // LOGIN HANDLER - NOW WITH LOADING SCREEN!
+        loginForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value.trim().toLowerCase();
+            const password = document.getElementById('login-password').value;
+
+            setLoading('login-btn', true);
+
+            setTimeout(() => {
+                const users = JSON.parse(localStorage.getItem('studio_users') || '[]');
+                const user = users.find(u => u.email === email && u.password === password);
+
+                if (user) {
+                    sessionStorage.setItem('studio_current_user', JSON.stringify(user));
+                    showMessage(loginMessage, 'success', 'Access Granted. Loading the studio...');
+                    setLoading('login-btn', false);
+                    
+                    // 🎧 REPLAY THE LOADING SCREEN BEFORE REDIRECTING
+                    setTimeout(() => {
+                        startLoader(() => {
+                            window.location.href = 'index.html';
+                        }, loginMessages);
+                    }, 800);
+                } else {
+                    const emailExists = users.find(u => u.email === email);
+                    if (!emailExists) {
+                        showMessage(loginMessage, 'error', 'Account not found. You must register first.');
+                    } else {
+                        showMessage(loginMessage, 'error', 'Invalid password. Credentials do not match our records.');
+                    }
+                    setLoading('login-btn', false);
+                }
+            }, 800);
+        });
+
+        // ==========================================
+        // 5. VIEW SWITCHING & 3D TILT EFFECT
+        // ==========================================
+        function switchView(view) {
+            const loginView = document.getElementById('login-view');
+            const registerView = document.getElementById('register-view');
+            
+            loginMessage.style.display = 'none';
+            registerMessage.style.display = 'none';
+
+            if (view === 'register') {
+                loginView.classList.remove('active-view');
+                loginView.classList.add('hidden-view');
+                setTimeout(() => {
+                    loginView.style.display = 'none';
+                    registerView.style.display = 'block';
+                    void registerView.offsetWidth;
+                    registerView.classList.remove('hidden-view');
+                    registerView.classList.add('active-view');
+                }, 400);
+            } else {
+                registerView.classList.remove('active-view');
+                registerView.classList.add('hidden-view');
+                setTimeout(() => {
+                    registerView.style.display = 'none';
+                    loginView.style.display = 'block';
+                    void loginView.offsetWidth;
+                    loginView.classList.remove('hidden-view');
+                    loginView.classList.add('active-view');
+                }, 400);
+            }
+        }
+
+        // 3D Tilt Effect for Auth Card
+        const authCard = document.getElementById('auth-card');
+        if (!('ontouchstart' in window || navigator.maxTouchPoints > 0)) {
+            authCard.addEventListener('mousemove', (e) => {
+                const rect = authCard.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                const centerX = rect.width / 2;
+                const centerY = rect.height / 2;
+                const rotateX = ((y - centerY) / centerY) * -8;
+                const rotateY = ((x - centerX) / centerX) * 8;
+                authCard.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale(1.01)`;
+            });
+            authCard.addEventListener('mouseleave', () => {
+                authCard.style.transform = 'perspective(1000px) rotateX(0) rotateY(0) scale(1)';
+            });
+        }
+
+        // ==========================================
+        // 6. INITIAL BOOT + SESSION CHECK
+        // ==========================================
+        // If already logged in, skip loader and go straight to app
+        if (sessionStorage.getItem('studio_current_user')) {
+            loader.classList.add('hidden');
+            window.location.href = 'index.html';
+        } else {
+            // Initial boot loader
+            window.addEventListener('load', () => {
+                startLoader(null, bootMessages);
+            });
+        }
+    </script>
+</body>
+</html>
